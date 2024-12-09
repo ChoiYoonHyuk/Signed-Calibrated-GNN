@@ -301,10 +301,8 @@ class GNN(torch.nn.Module):
                 aa_2 = aa_2 - aa_minus
                 
         z_loss = torch.abs(torch.sum(edge_weights) - torch.sum(s_1)) + torch.abs(torch.sum(edge_weights) - torch.sum(s_2))
-        
-        calib = - torch.max(x_out, 1)[0] + torch.topk(x_out, 2)[0][:, 1]
                 
-        return F.log_softmax(x_out, dim=1), F.softmax(x_out, dim=1), 0.01 * consist_loss + 0.01 * nuc_loss, s_1, s_2, torch.mean(calib)
+        return F.log_softmax(x_out, dim=1), F.softmax(x_out, dim=1), 0.01 * consist_loss + 0.01 * nuc_loss, s_1, s_2 #+ 0.001 * z_loss
         
 
 gnn = GNN().to(device)
@@ -355,19 +353,19 @@ for e in range(100):
     for _ in tqdm(range(200)):                  
         gnn.train()
         
-        out, _, inte_loss, _, _, calib = gnn(data, 0)
+        out, _, inte_loss, _, _ = gnn(data, 0)
         
         gnn_optim.zero_grad()
         if idx == 0:
-            loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask]) + calib * .01
+            loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
         else:
-            loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask]) + inte_loss + calib * .01
+            loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask]) + inte_loss
         loss.backward()
         gnn_optim.step()
         
         with torch.no_grad():
             gnn.eval()
-            pred, x, _, s1, s2, _ = gnn(data, 1)
+            pred, x, _, s1, s2 = gnn(data, 1)
             _, pred = pred.max(dim=1)
             correct = float(pred[data.test_mask].eq(data.y[data.test_mask]).sum().item())
             acc = correct / data.test_mask.sum().item()
